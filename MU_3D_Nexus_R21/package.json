@@ -1,0 +1,12 @@
+{
+  "name": "mu-3d-nexus-r21",
+  "version": "21.0.0",
+  "private": true,
+  "description": "MU 3D Nexus - Hybrid Combat Evolution",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "Remix Zeldrix 2050 · Despertar del Linaje",
+  "description": "Juego de rol y acción en 3D ambientado en el Bosque Mugen y la Llanura de Hyrule Neón con combate, mazmorras y misiones.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MU 3D Nexus R21</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;overflow:hidden;background:#080b12;color:#fff;
+font:14px Arial,sans-serif}
+canvas{display:block}
+#hud{position:fixed;inset:0;pointer-events:none}
+.panel{background:#101722dd;border:1px solid #62758a;
+border-radius:8px;padding:12px;box-shadow:0 4px 20px #0008}
+#status{position:absolute;top:14px;left:14px;width:245px}
+#controls{position:absolute;bottom:14px;left:14px;max-width:330px}
+#target{position:absolute;top:14px;right:14px;width:220px}
+.bar{height:10px;background:#303744;border-radius:5px;
+overflow:hidden;margin:6px 0}
+.fill{height:100%;width:100%;transition:width .12s}
+.hp{background:linear-gradient(90deg,#9b1525,#f64c54)}
+.mp{background:linear-gradient(90deg,#1747bb,#50c9ff)}
+#message{position:absolute;top:32%;width:100%;text-align:center;
+font-size:24px;font-weight:bold;color:#ffd978;
+text-shadow:0 2px 5px #000}
+.label{color:#b9c8dc;font-size:12px}
+button{pointer-events:auto;background:#26394d;color:white;
+border:1px solid #68829b;border-radius:6px;padding:10px}
+#attack{position:absolute;right:20px;bottom:24px;
+width:100px;height:64px;background:#6b2433dd;font-weight:bold}
+</style>
+</head>
+<body>
+<div id="hud">
+ <div id="status" class="panel">
+  <b>MU 3D NEXUS <span style="color:#f5cc76">R21</span></b>
+  <div class="label" id="className">Dark Knight · Nivel 1</div>
+  <div>Vida <span id="hpText">100 / 100</span></div>
+  <div class="bar"><div id="hp" class="fill hp"></div></div>
+  <div>Maná <span id="mpText">50 / 50</span></div>
+  <div class="bar"><div id="mp" class="fill mp"></div></div>
+  <div class="label">Experiencia: <span id="xp">0</span></div>
+ </div>
+ <div id="target" class="panel">
+  <b id="enemyName">Campo de entrenamiento</b>
+  <div class="bar"><div id="enemyHp" class="fill hp"></div></div>
+  <div class="label" id="enemyInfo">Busca un monstruo</div>
+ </div>
+ <div id="controls" class="panel">
+  <b>Controles</b><br>
+  WASD: moverse · Ratón: orientar cámara<br>
+  Espacio o clic: atacar · Shift: correr<br>
+  <span class="label">Prototipo local R21.0 · Combate de demostración</span>
+ </div>
+ <div id="message"></div>
+ <button id="attack">ATACAR</button>
+</div>
+<script type="module">
+import * as THREE from
+'https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js';
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x101824);
+scene.fog = new THREE.Fog(0x101824, 24, 75);
+
+const camera = new THREE.PerspectiveCamera(
+ 65, innerWidth/innerHeight, 0.1, 150);
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.75));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xbedaff,0x29202c,2));
+const sun=new THREE.DirectionalLight(0xffdfb0,3);
+sun.position.set(-8,16,8);
+sun.castShadow=true;
+sun.shadow.mapSize.set(1024,1024);
+scene.add(sun);
+
+const ground=new THREE.Mesh(
+ new THREE.PlaneGeometry(100,100),
+ new THREE.MeshStandardMaterial({color:0x303b38,roughness:0.95}));
+ground.rotation.x=-Math.PI/2;
+ground.receiveShadow=true;
+scene.add(ground);
+
+const grid=new THREE.GridHelper(100,50,0x617568,0x3b4b46);
+grid.position.y=0.012;
+scene.add(grid);
+
+function material(color,metalness=0,roughness=.6){
+ return new THREE.MeshStandardMaterial({color,metalness,roughness});
+}
+function part(parent,geo,mat,x,y,z){
+ const m=new THREE.Mesh(geo,mat);
+ m.position.set(x,y,z);
+ m.castShadow=true;m.receiveShadow=true;
+ parent.add(m);return m;
+}
+
+const player=new THREE.Group();
+scene.add(player);
+
+const armor=material(0x303b50,.7,.3);
+const steel=material(0xa9bfd0,.8,.25);
+const skin=material(0xd4a17e,0,.7);
+const dark=material(0x131a26,.35,.55);
+const gold=material(0xc89a47,.65,.3);
+
+const torso=part(player,new THREE.BoxGeometry(.72,.9,.4),
+ armor,0,1.35,0);
+part(player,new THREE.BoxGeometry(.78,.2,.44),
+ steel,0,1.72,0);
+const head=part(player,new THREE.SphereGeometry(.23,16,12),
+ skin,0,2.04,0);
+part(player,new THREE.BoxGeometry(.49,.15,.48),
+ steel,0,2.22,0);
+part(player,new THREE.BoxGeometry(.1,.22,.12),
+ gold,0,2.31,.03);
+
+const legs=[];
+for(const x of [-.22,.22]){
+ const leg=part(player,new THREE.BoxGeometry(.23,.64,.26),
+ dark,x,.48,0);
+ legs.push(leg);
+ part(player,new THREE.BoxGeometry(.28,.15,.4),
+ steel,x,.15,.06);
+}
+const arms=[];
+for(const x of [-.49,.49]){
+ const arm=part(player,new THREE.BoxGeometry(.2,.65,.23),
+ armor,x,1.37,0);
+ arms.push(arm);
+ part(player,new THREE.BoxGeometry(.25,.23,.28),
+ steel,x,1.06,0);
+}
+const sword=new THREE.Group();
+sword.position.set(.57,1.05,.03);
+player.add(sword);
+part(sword,new THREE.BoxGeometry(.09,.5,.1),gold,0,-.22,0);
+part(sword,new THREE.BoxGeometry(.07,1.0,.045),steel,0,.48,0);
+part(sword,new THREE.BoxGeometry(.16,.12,.13),gold,0,.02,0);
+sword.rotation.z=-.3;
+
+const ring=part(player,new THREE.TorusGeometry(.48,.035,8,32),
+ material(0x5ac9ff,0,.3),0,.04,0);
+ring.rotation.x=Math.PI/2;
+
+const enemies=[];
+function makeEnemy(x,z,index){
+ const g=new THREE.Group();g.position.set(x,0,z);scene.add(g);
+ const skinM=material(index%2?0x607b45:0x806044);
+ part(g,new THREE.SphereGeometry(.37,14,12),skinM,0,.8,0);
+ part(g,new THREE.BoxGeometry(.52,.42,.4),dark,0,.43,0);
+ for(const side of [-1,1]){
+  part(g,new THREE.ConeGeometry(.09,.28,8),
+   material(0xc4b78b),side*.22,1.17,0);
+ }
+ const eyeMat=new THREE.MeshBasicMaterial({color:0xff3434});
+ part(g,new THREE.SphereGeometry(.045,8,8),eyeMat,-.13,.89,.32);
+ part(g,new THREE.SphereGeometry(.045,8,8),eyeMat,.13,.89,.32);
+ const e={group:g,hp:60,maxHp:60,alive:true,
+  attackTimer:0,hitTimer:0,name:index%2?'Goblin':'Guerrero caído'};
+ enemies.push(e);return e;
+}
+for(let i=0;i<7;i++){
+ makeEnemy((i%3-1)*4, -5-Math.floor(i/3)*4,i);
+}
+
+const keys={};
+let yaw=0, pitch=.25, attackTime=0, attackCooldown=0;
+let hp=100,mp=50,xp=0,kills=0,selected=null;
+const msg=document.getElementById('message');
+let msgTimer=0;
+
+function message(t){
+ msg.textContent=t;msgTimer=1.6;
+}
+function chooseTarget(){
+ let best=Infinity;selected=null;
+ for(const e of enemies){
+  if(!e.alive)continue;
+  const d=player.position.distanceTo(e.group.position);
+  if(d<best){best=d;selected=e;}
+ }
+ updateTarget();
+}
+function updateTarget(){
+ const e=selected;
+ document.getElementById('enemyName').textContent=
+  e&&e.alive?e.name:'Campo de entrenamiento';
+ document.getElementById('enemyInfo').textContent=
+  e&&e.alive?`Vida ${Math.ceil(e.hp)} / ${e.maxHp}`:'Busca un monstruo';
+ document.getElementById('enemyHp').style.width=
+  e&&e.alive?(100*e.hp/e.maxHp)+'%':'0%';
+}
+function attack(){
+ if(attackCooldown>0)return;
+ attackCooldown=.48;attackTime=.3;
+ let hit=null,best=2.35;
+ for(const e of enemies){
+  if(!e.alive)continue;
+  const dx=e.group.position.x-player.position.x;
+  const dz=e.group.position.z-player.position.z;
+  const dist=Math.hypot(dx,dz);
+  if(dist>best)continue;
+  const dot=(dx*(-Math.sin(yaw))+dz*(-Math.cos(yaw)))/Math.max(dist,.01);
+  if(dot>.05){best=dist;hit=e;}
+ }
+ if(hit){
+  hit.hp-=25;hit.hitTimer=.18;
+  hit.group.scale.setScalar(1.08);
+  if(hit.hp<=0){
+   hit.hp=0;hit.alive=false;
+   scene.remove(hit.group);xp+=20;kills++;
+   message('¡Monstruo derrotado! +20 EXP');
+   selected=null;chooseTarget();
+  }else{
+   message('¡Impacto! -25');
+   selected=hit;updateTarget();
+  }
+ }else message('Ataque fallido: acércate y mira al enemigo');
+}
+addEventListener('keydown',e=>{
+ keys[e.code]=true;
+ if(['Space','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault();
+ if(e.code==='Space'&&!e.repeat)attack();
+});
+addEventListener('keyup',e=>keys[e.code]=false);
+document.getElementById('attack').addEventListener('click',attack);
+
+let dragging=false,lastX=0,lastY=0;
+renderer.domElement.addEventListener('pointerdown',e=>{
+ if(e.button===2){dragging=true;lastX=e.clientX;lastY=e.clientY;}
+});
+addEventListener('pointerup',()=>dragging=false);
+addEventListener('pointermove',e=>{
+ if(!dragging)return;
+ yaw-=(e.clientX-lastX)*.006;
+ pitch=THREE.MathUtils.clamp(
+  pitch+(e.clientY-lastY)*.004,-.1,.85);
+ lastX=e.clientX;lastY=e.clientY;
+});
+renderer.domElement.addEventListener('contextmenu',e=>e.preventDefault());
+
+let last=performance.now(),walkTime=0;
+function frame(now){
+ requestAnimationFrame(frame);
+ const dt=Math.min((now-last)/1000,.04);last=now;
+ attackCooldown=Math.max(0,attackCooldown-dt);
+ attackTime=Math.max(0,attackTime-dt);
+ msgTimer=Math.max(0,msgTimer-dt);
+ if(!msgTimer)msg.textContent='';
+
+ let f=(keys.KeyW||keys.ArrowUp?1:0)-
+       (keys.KeyS||keys.ArrowDown?1:0);
+ let s=(keys.KeyD?1:0)-(keys.KeyA?1:0);
+ const moving=f!==0||s!==0;
+ if(moving){
+  const len=Math.hypot(f,s);f/=len;s/=len;
+  const speed=(keys.ShiftLeft||keys.ShiftRight)?7:4;
+  const dx=(-Math.sin(yaw)*f+Math.cos(yaw)*s)*speed*dt;
+  const dz=(-Math.cos(yaw)*f-Math.sin(yaw)*s)*speed*dt;
+  player.position.x+=dx;player.position.z+=dz;
+  player.position.x=THREE.MathUtils.clamp(player.position.x,-45,45);
+  player.position.z=THREE.MathUtils.clamp(player.position.z,-45,45);
+  walkTime+=dt*speed;
+  player.rotation.y=yaw+Math.atan2(s,f);
+ }else player.rotation.y=yaw;
+ legs.forEach((leg,i)=>{
+  leg.rotation.x=moving?Math.sin(walkTime+(i*Math.PI))*.65:0;
+ });
+ arms[0].rotation.x=moving?Math.sin(walkTime)*.25:0;
+ arms[1].rotation.x=attackTime>0?-1.9*(attackTime/.3):0;
+ sword.rotation.z=attackTime>0?-1.7:-.3;
+ torso.rotation.x=attackTime>0?-.12:0;
+
+ for(const e of enemies){
+  if(!e.alive)continue;
+  const dx=player.position.x-e.group.position.x;
+  const dz=player.position.z-e.group.position.z;
+  const dist=Math.hypot(dx,dz);
+  if(dist>1.5&&dist<12){
+   e.group.position.x+=dx/dist*dt*.8;
+   e.group.position.z+=dz/dist*dt*.8;
+   e.group.rotation.y=Math.atan2(dx,dz);
+  }
+  e.hitTimer=Math.max(0,e.hitTimer-dt);
+  e.group.scale.lerp(new THREE.Vector3(1,1,1),Math.min(1,dt*12));
+  e.attackTimer-=dt;
+  if(dist<1.25&&e.attackTimer<=0){
+   e.attackTimer=1.5;hp=Math.max(0,hp-5);
+   message('¡Has recibido 5 de daño!');
+   if(hp<=0){hp=100;player.position.set(0,0,0);
+    message('Has renacido en el punto inicial');}
+  }
+ }
+ if(!selected||!selected.alive)chooseTarget();
+ updateTarget();
+
+ const desired=new THREE.Vector3(
+  player.position.x+Math.sin(yaw)*8,
+  4+pitch*4,
+  player.position.z+Math.cos(yaw)*8
+ );
+ camera.position.lerp(desired,Math.min(1,dt*5));
+ camera.lookAt(player.position.x,1.2,player.position.z);
+
+ document.getElementById('hp').style.width=hp+'%';
+ document.getElementById('hpText').textContent=hp+' / 100';
+ document.getElementById('mpText').textContent=mp+' / 50';
+ document.getElementById('mp').style.width=(mp*2)+'%';
+ document.getElementById('xp').textContent=xp;
+ renderer.render(scene,camera);
+}
+chooseTarget();
+camera.position.set(0,5,9);
+requestAnimationFrame(frame);
+addEventListener('resize',()=>{
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>

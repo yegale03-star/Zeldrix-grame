@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>MU 3D Nexus R18 — Hybrid Combat Evolution</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;overflow:hidden;background:#080b12;color:#fff;font:14px system-ui,sans-serif;-webkit-user-select:none;user-select:none}
+canvas{display:block;width:100vw;height:100vh}
+#hud{position:fixed;inset:0;pointer-events:none}
+.panel{background:#0e1624ea;border:1px solid #38bdf888;border-radius:12px;padding:12px;box-shadow:0 8px 32px #000000a0;backdrop-filter:blur(8px)}
+#status{position:absolute;top:14px;left:14px;width:260px}
+#controls{position:absolute;bottom:14px;left:14px;max-width:340px}
+#target{position:absolute;top:14px;right:14px;width:240px}
+.bar{height:12px;background:#1e293b;border-radius:6px;overflow:hidden;margin:6px 0;border:1px solid #334155}
+.fill{height:100%;width:100%;transition:width .15s ease-out}
+.hp{background:linear-gradient(90deg,#b91c1c,#ef4444)}
+.mp{background:linear-gradient(90deg,#1d4ed8,#38bdf8)}
+#message{position:absolute;top:28%;width:100%;text-align:center;font-size:22px;font-weight:bold;color:#facc15;text-shadow:0 0 12px #000, 0 0 24px rgba(250,204,21,0.5);pointer-events:none}
+.label{color:#94a3b8;font-size:12px}
+button{pointer-events:auto;background:#1e293b;color:white;border:1px solid #475569;border-radius:8px;padding:10px;font-weight:600;cursor:pointer;transition:all .15s}
+button:active{transform:scale(0.96)}
+#mobileActions{position:absolute;right:16px;bottom:20px;display:flex;flex-direction:column;gap:10px;align-items:flex-end}
+.btn-action{width:88px;height:52px;font-size:13px;display:flex;align-items:center;justify-content:center;gap:4px;border-radius:10px}
+#attackBtn{background:linear-gradient(135deg,#991b1b,#ef4444);border-color:#f87171;box-shadow:0 0 15px rgba(239,68,68,0.4);font-size:15px}
+#cycloneBtn{background:linear-gradient(135deg,#4338ca,#6366f1);border-color:#818cf8}
+#mountBtnQuick{background:linear-gradient(135deg,#0284c7,#06b6d4);border-color:#38bdf8}
+#openR18{position:absolute;top:14px;left:286px;background:#0369a1;border-color:#38bdf8;padding:8px 14px;border-radius:8px;pointer-events:auto}
+@media(max-width:700px){
+  #status{width:210px;padding:8px;top:8px;left:8px}
+  #target{width:180px;padding:8px;top:8px;right:8px}
+  #controls{display:none}
+  #openR18{left:8px;top:148px;padding:6px 10px;font-size:11px}
+}
+</style>
+</head>
+<body>
+<div id="hud">
+  <div id="status" class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <b>MU 3D NEXUS <span style="color:#38bdf8">R18</span></b>
+      <span id="currentMapTag" style="font-size:10px;padding:2px 6px;border-radius:4px;background:#0369a1;color:#e0f2fe">Lorencia</span>
+    </div>
+    <div class="label" id="className">Dark Knight · Nivel 1</div>
+    <div style="display:flex;justify-content:space-between;margin-top:4px;font-size:12px">
+      <span>Vida</span><span id="hpText">100 / 100</span>
+    </div>
+    <div class="bar"><div id="hp" class="fill hp"></div></div>
+    <div style="display:flex;justify-content:space-between;font-size:12px">
+      <span>Maná</span><span id="mpText">50 / 50</span>
+    </div>
+    <div class="bar"><div id="mp" class="fill mp"></div></div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:#94a3b8">
+      <span>Experiencia: <b id="xp" style="color:#facc15">0</b></span>
+      <span>Skin: <b id="skinLabel" style="color:#38bdf8">Anti Venom</b></span>
+    </div>
+  </div>
+
+  <button id="openR18">⚙️ PANEL R18</button>
+
+  <div id="target" class="panel">
+    <b id="enemyName">Campo de Batalla</b>
+    <div class="bar"><div id="enemyHp" class="fill hp"></div></div>
+    <div class="label" id="enemyInfo">Busca un objetivo</div>
+  </div>
+
+  <div id="controls" class="panel">
+    <b style="color:#38bdf8">Controles Híbridos R18</b><br>
+    <span class="label">WASD / Flechas: Mover · Ratón: Girar cámara</span><br>
+    <span class="label">Espacio: Ataque Normal · R: Twisting Slash</span><br>
+    <span class="label">M: Montura Ciber Corcel · P: Portal Torlan</span><br>
+    <span class="label" style="color:#7dd3fc">Skins con buff real de ataque, defensa, vida y lifesteal</span>
+  </div>
+
+  <div id="message"></div>
+
+  <div id="mobileActions">
+    <button id="mountBtnQuick" class="btn-action">🏇 MONTURA</button>
+    <button id="cycloneBtn" class="btn-action">🌪️ CICLÓN</button>
+    <button id="attackBtn" class="btn-action">⚔️ ATACAR</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+
+<script>
+/* MU 3D Nexus R18 Core Engine
+   Compatible con la arquitectura modular R17 y addon R18
+*/
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a111e);
+scene.fog = new THREE.Fog(0x0a111e, 25, 90);
+
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+document.body.appendChild(renderer.domElement);
+
+const ambientLight = new THREE.HemisphereLight(0xcde3ff, 0x181e2b, 1.8);
+scene.add(ambientLight);
+
+const sun = new THREE.DirectionalLight(0xffecd1, 2.5);
+sun.position.set(-15, 25, 12);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+scene.add(sun);
+
+// Mapas del juego (8 originales + Cañón Torlan)
+const MAPS = [
+  ["Lorencia", 1, 0x223528, 0x14201a, [["Goblin", 1, 0x5a7a40, 1.0], ["Ladrón Errante", 3, 0x6e5038, 1.1]]],
+  ["Noria", 15, 0x1c382b, 0x0f241a, [["Duende de Bosque", 18, 0x428258, 1.1], ["Gólem Élfico", 24, 0x526e5e, 1.4]]],
+  ["Devias", 30, 0x3d4f66, 0x222c3a, [["Yeti Ártico", 35, 0xd4e2ef, 1.6], ["Gusano Glacial", 42, 0x93b5cf, 1.3]]],
+  ["Dungeon", 45, 0x2d2222, 0x181010, [["Esqueleto Guerrero", 50, 0xa39c94, 1.2], ["Gorgona Carmesí", 58, 0x822929, 1.5]]],
+  ["Atlans", 60, 0x143444, 0x091c26, [["Hydra Marina", 65, 0x2e8296, 1.7], ["Tiburón Abisal", 72, 0x245873, 1.4]]],
+  ["Lost Tower", 75, 0x382218, 0x1f110a, [["Sombra Maldita", 80, 0x4a3224, 1.3], ["Baleroc Ígneo", 90, 0xa83e1b, 1.8]]],
+  ["Tarkan", 90, 0x473822, 0x261d10, [["Mutante del Desierto", 95, 0x9e804f, 1.5], ["Caza-Sombras", 100, 0x544733, 1.6]]],
+  ["Icarus", 105, 0x242844, 0x101326, [["Reina Megami", 110, 0x7b6eb8, 1.8], ["Fénix del Vacío", 120, 0x4879b8, 2.0]]],
+  ["Cañón Torlan", 100, 0x9c5836, 0x371b25, [["Droide de asalto", 105, 0x8799a6, 1.2], ["Centinela mecánico", 115, 0x3aafbf, 1.5], ["Titán Blindado", 130, 0x6e3030, 2.0]]]
+];
+
+let currentMapIndex = 0;
+let groundMesh = null;
+let gridMesh = null;
+let portalMesh = null;
+
+function buildMap(idx) {
+  currentMapIndex = idx % MAPS.length;
+  const mapData = MAPS[currentMapIndex];
+  document.getElementById("currentMapTag").textContent = mapData[0];
+
+  if (groundMesh) scene.remove(groundMesh);
+  if (gridMesh) scene.remove(gridMesh);
+  if (portalMesh) scene.remove(portalMesh);
+
+  // Terreno temático
+  groundMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(160, 160),
+    new THREE.MeshStandardMaterial({ color: mapData[2], roughness: 0.9, metalness: 0.1 })
+  );
+  groundMesh.rotation.x = -Math.PI / 2;
+  groundMesh.receiveShadow = true;
+  scene.add(groundMesh);
+
+  gridMesh = new THREE.GridHelper(160, 40, mapData[3], 0x1e293b);
+  gridMesh.position.y = 0.015;
+  scene.add(gridMesh);
+
+  // Portal dimensional místico
+  portalMesh = new THREE.Group();
+  const portalRing = new THREE.Mesh(
+    new THREE.TorusGeometry(2.4, 0.22, 16, 32),
+    new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
+  );
+  portalRing.position.y = 2.6;
+  portalMesh.add(portalRing);
+  const portalCore = new THREE.Mesh(
+    new THREE.CircleGeometry(2.2, 32),
+    new THREE.MeshBasicMaterial({ color: 0x0284c7, transparent: true, opacity: 0.75, side: THREE.DoubleSide })
+  );
+  portalCore.position.y = 2.6;
+  portalMesh.add(portalCore);
+  portalMesh.position.set(0, 0, -28);
+  scene.add(portalMesh);
+
+  respawnEnemies(mapData);
+  showMessage("Viajando a " + mapData[0]);
+}
+
+// Personaje y montura
+const player = new THREE.Group();
+scene.add(player);
+
+let currentSkinColor = 0x38bdf8;
+let skinStatMultiplier = { atk: 1.0, def: 1.0, hpMax: 100, crit: 0.05, lifesteal: 0.0 };
+let armorMesh = null;
+let swordMesh = null;
+
+function createPlayerVisual() {
+  while (player.children.length > 0) {
+    player.remove(player.children[0]);
+  }
+
+  const armorMat = new THREE.MeshStandardMaterial({ color: currentSkinColor, metalness: 0.8, roughness: 0.3 });
+  const darkMat = new THREE.MeshStandardMaterial({ color: 0x111827, metalness: 0.5, roughness: 0.5 });
+  const steelMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.9, roughness: 0.2 });
+
+  // Torso
+  armorMesh = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.95, 0.45), armorMat);
+  armorMesh.position.y = 1.35;
+  armorMesh.castShadow = true;
+  player.add(armorMesh);
+
+  // Cabeza con yelmo
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 16, 16), steelMat);
+  head.position.y = 2.05;
+  player.add(head);
+
+  // Hombreras
+  for (const s of [-0.5, 0.5]) {
+    const pad = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.25, 0.35), armorMat);
+    pad.position.set(s, 1.8, 0);
+    player.add(pad);
+  }
+
+  // Piernas
+  for (const s of [-0.22, 0.22]) {
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.7, 0.26), darkMat);
+    leg.position.set(s, 0.48, 0);
+    player.add(leg);
+  }
+
+  // Brazos
+  for (const s of [-0.5, 0.5]) {
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.65, 0.24), armorMat);
+    arm.position.set(s, 1.35, 0);
+    player.add(arm);
+  }
+
+  // Espada sagrada
+  const sword = new THREE.Group();
+  sword.position.set(0.62, 1.1, 0.1);
+  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.25, 0.05), steelMat);
+  blade.position.y = 0.55;
+  sword.add(blade);
+  const guard = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.1, 0.12), armorMat);
+  sword.add(guard);
+  swordMesh = sword;
+  player.add(sword);
+
+  // Anillo de aura
+  const aura = new THREE.Mesh(
+    new THREE.TorusGeometry(0.55, 0.04, 8, 32),
+    new THREE.MeshBasicMaterial({ color: currentSkinColor })
+  );
+  aura.rotation.x = Math.PI / 2;
+  aura.position.y = 0.05;
+  player.add(aura);
+}
+
+createPlayerVisual();
+
+// Ciber Corcel (Montura R18)
+let isMounted = false;
+let mountSpeedMultiplier = 1.0;
+let mountObject = null;
+
+function createMountModel() {
+  const mount = new THREE.Group();
+  // Chasis Ciber
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(0.85, 0.75, 1.45),
+    new THREE.MeshStandardMaterial({ color: 0x161e2e, metalness: 0.9, roughness: 0.18, emissive: 0x082f49, emissiveIntensity: 1.5 })
+  );
+  body.position.y = 0.9;
+  body.castShadow = true;
+  mount.add(body);
+
+  // Fila de Neón Cian
+  const neon = new THREE.Mesh(
+    new THREE.BoxGeometry(0.9, 0.15, 1.5),
+    new THREE.MeshBasicMaterial({ color: 0x00f0ff })
+  );
+  neon.position.y = 1.05;
+  mount.add(neon);
+
+  // Cuello
+  const neck = new THREE.Mesh(
+    new THREE.BoxGeometry(0.35, 0.7, 0.45),
+    new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.85 })
+  );
+  neck.position.set(0, 1.4, -0.7);
+  neck.rotation.x = 0.45;
+  mount.add(neck);
+
+  // Cabeza Ciber Corcel
+  const head = new THREE.Mesh(
+    new THREE.BoxGeometry(0.32, 0.38, 0.6),
+    new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.9 })
+  );
+  head.position.set(0, 1.7, -0.95);
+  mount.add(head);
+
+  // Crin de fuego cian de energía
+  const mane = new THREE.Mesh(
+    new THREE.BoxGeometry(0.12, 0.45, 0.95),
+    new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
+  );
+  mane.position.set(0, 1.65, -0.45);
+  mane.rotation.x = 0.4;
+  mount.add(mane);
+
+  // 4 patas mecánicas con pezuñas de plasma
+  for (const x of [-0.34, 0.34]) {
+    for (const z of [-0.5, 0.5]) {
+      const leg = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.09, 0.07, 0.7, 8),
+        new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.8 })
+      );
+      leg.position.set(x, 0.42, z);
+      leg.castShadow = true;
+      mount.add(leg);
+
+      const hoof = new THREE.Mesh(
+        new THREE.BoxGeometry(0.18, 0.12, 0.2),
+        new THREE.MeshBasicMaterial({ color: 0x00f0ff })
+      );
+      hoof.position.set(x, 0.06, z);
+      mount.add(hoof);
+    }
+  }
+
+  // Cola de plasma brillante
+  const tail = new THREE.Mesh(
+    new THREE.ConeGeometry(0.15, 0.8, 8),
+    new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
+  );
+  tail.position.set(0, 1.05, 0.95);
+  tail.rotation.x = 0.7;
+  mount.add(tail);
+
+  return mount;
+}
+
+function toggleMount() {
+  isMounted = !isMounted;
+  if (isMounted) {
+    if (!mountObject) mountObject = createMountModel();
+    player.add(mountObject);
+    mountObject.position.set(0, -0.15, 0);
+    player.position.y = 0.6; // Elevar jinete
+    mountSpeedMultiplier = 1.8;
+    showMessage("🏇 ¡Ciber Corcel invocado! Velocidad +80%");
+  } else {
+    if (mountObject && mountObject.parent) {
+      mountObject.parent.remove(mountObject);
+    }
+    player.position.y = 0;
+    mountSpeedMultiplier = 1.0;
+    showMessage("Ciber Corcel guardado.");
+  }
+}
+
+// Enemigos
+const enemies = [];
+function respawnEnemies(mapData) {
+  enemies.forEach(e => {
+    if (e.mesh.parent) e.mesh.parent.remove(e.mesh);
+  });
+  enemies.length = 0;
+
+  const enemyArchetypes = mapData[4];
+  for (let i = 0; i < 9; i++) {
+    const arch = enemyArchetypes[i % enemyArchetypes.length];
+    const group = new THREE.Group();
+    const x = (i % 3 - 1) * 9 + (Math.random() * 4 - 2);
+    const z = -10 - Math.floor(i / 3) * 8 + (Math.random() * 4 - 2);
+    group.position.set(x, 0, z);
+
+    const scale = arch[3] || 1.0;
+    const bodyMat = new THREE.MeshStandardMaterial({ color: arch[2], roughness: 0.6, metalness: 0.3 });
+    const body = new THREE.Mesh(new THREE.BoxGeometry(0.8 * scale, 1.1 * scale, 0.6 * scale), bodyMat);
+    body.position.y = 0.55 * scale;
+    body.castShadow = true;
+    group.add(body);
+
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff1e1e });
+    const eye1 = new THREE.Mesh(new THREE.SphereGeometry(0.08 * scale, 8, 8), eyeMat);
+    eye1.position.set(-0.2 * scale, 0.9 * scale, 0.32 * scale);
+    group.add(eye1);
+    const eye2 = eye1.clone();
+    eye2.position.x = 0.2 * scale;
+    group.add(eye2);
+
+    scene.add(group);
+    enemies.push({
+      mesh: group,
+      name: arch[0],
+      level: arch[1],
+      hp: 60 + arch[1] * 2,
+      maxHp: 60 + arch[1] * 2,
+      alive: true
+    });
+  }
+  updateTargetUI();
+}
+
+// Estado del jugador
+let playerHp = 100;
+let playerMaxHp = 100;
+let playerMp = 50;
+let playerMaxMp = 50;
+let playerXp = 0;
+let playerLevel = 1;
+let selectedEnemy = null;
+let msgTimer = 0;
+
+function showMessage(txt) {
+  const m = document.getElementById("message");
+  m.textContent = txt;
+  msgTimer = 2.0;
+}
+
+function updateTargetUI() {
+  const e = selectedEnemy;
+  const nameEl = document.getElementById("enemyName");
+  const hpEl = document.getElementById("enemyHp");
+  const infoEl = document.getElementById("enemyInfo");
+
+  if (e && e.alive) {
+    nameEl.textContent = `${e.name} · Lv.${e.level}`;
+    hpEl.style.width = Math.max(0, (e.hp / e.maxHp) * 100) + "%";
+    infoEl.textContent = `Vida ${Math.ceil(e.hp)} / ${e.maxHp}`;
+  } else {
+    nameEl.textContent = "Campo de Batalla";
+    hpEl.style.width = "0%";
+    infoEl.textContent = "Busca un objetivo";
+  }
+}
+
+function updatePlayerUI() {
+  document.getElementById("hpText").textContent = `${Math.ceil(playerHp)} / ${playerMaxHp}`;
+  document.getElementById("hp").style.width = `${Math.max(0, (playerHp / playerMaxHp) * 100)}%`;
+  document.getElementById("mpText").textContent = `${Math.ceil(playerMp)} / ${playerMaxMp}`;
+  document.getElementById("mp").style.width = `${Math.max(0, (playerMp / playerMaxMp) * 100)}%`;
+  document.getElementById("xp").textContent = playerXp;
+  document.getElementById("className").textContent = `Dark Knight · Nivel ${playerLevel}`;
+}
+
+// ==========================================
+// SISTEMA DE PARTÍCULAS THREE.JS: CHISPAS DE IMPACTO R18
+// ==========================================
+const MAX_SPARKS = 300;
+const sparkGeo = new THREE.BufferGeometry();
+const sparkPositions = new Float32Array(MAX_SPARKS * 3);
+const sparkColors = new Float32Array(MAX_SPARKS * 3);
+const sparkVelocities = [];
+const sparkLifetimes = new Float32Array(MAX_SPARKS);
+
+for (let i = 0; i < MAX_SPARKS; i++) {
+  sparkVelocities.push(new THREE.Vector3());
+  sparkPositions[i * 3] = 0;
+  sparkPositions[i * 3 + 1] = -999;
+  sparkPositions[i * 3 + 2] = 0;
+  sparkColors[i * 3] = 1;
+  sparkColors[i * 3 + 1] = 0.8;
+  sparkColors[i * 3 + 2] = 0.2;
+  sparkLifetimes[i] = 0;
+}
+
+sparkGeo.setAttribute('position', new THREE.BufferAttribute(sparkPositions, 3));
+sparkGeo.setAttribute('color', new THREE.BufferAttribute(sparkColors, 3));
+
+const sparkMat = new THREE.PointsMaterial({
+  size: 0.38,
+  vertexColors: true,
+  transparent: true,
+  opacity: 0.95,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false
+});
+
+const sparkPoints = new THREE.Points(sparkGeo, sparkMat);
+scene.add(sparkPoints);
+
+function spawnHitSparks(originPos, isCrit = false, isCyclone = false) {
+  const count = isCrit ? 36 : (isCyclone ? 28 : 18);
+  const baseColor = isCrit
+    ? new THREE.Color(0xffe066)
+    : (isCyclone ? new THREE.Color(0x38bdf8) : new THREE.Color(0xff8c00));
+
+  let spawned = 0;
+  for (let i = 0; i < MAX_SPARKS && spawned < count; i++) {
+    if (sparkLifetimes[i] <= 0) {
+      sparkLifetimes[i] = 0.35 + Math.random() * 0.25;
+
+      sparkPositions[i * 3] = originPos.x + (Math.random() - 0.5) * 0.3;
+      sparkPositions[i * 3 + 1] = originPos.y + 0.85 + (Math.random() - 0.5) * 0.3;
+      sparkPositions[i * 3 + 2] = originPos.z + (Math.random() - 0.5) * 0.3;
+
+      const speed = (isCrit ? 9.5 : (isCyclone ? 8.0 : 6.2)) * (0.65 + Math.random() * 0.7);
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.random() * Math.PI * 0.75;
+
+      sparkVelocities[i].set(
+        Math.sin(phi) * Math.cos(theta) * speed,
+        Math.cos(phi) * speed * 0.85 + 2.5,
+        Math.sin(phi) * Math.sin(theta) * speed
+      );
+
+      const col = baseColor.clone();
+      if (Math.random() < 0.35) {
+        col.setHex(0xffffff);
+      } else if (isCyclone && Math.random() < 0.5) {
+        col.setHex(0x00f0ff);
+      }
+
+      sparkColors[i * 3] = col.r;
+      sparkColors[i * 3 + 1] = col.g;
+      sparkColors[i * 3 + 2] = col.b;
+
+      spawned++;
+    }
+  }
+  sparkGeo.attributes.position.needsUpdate = true;
+  sparkGeo.attributes.color.needsUpdate = true;
+}
+
+function updateSparks(delta) {
+  const gravity = 18.0;
+  let hasActive = false;
+  for (let i = 0; i < MAX_SPARKS; i++) {
+    if (sparkLifetimes[i] > 0) {
+      hasActive = true;
+      sparkLifetimes[i] -= delta;
+      if (sparkLifetimes[i] <= 0) {
+        sparkPositions[i * 3 + 1] = -999;
+      } else {
+        sparkVelocities[i].y -= gravity * delta;
+        sparkPositions[i * 3] += sparkVelocities[i].x * delta;
+        sparkPositions[i * 3 + 1] += sparkVelocities[i].y * delta;
+        sparkPositions[i * 3 + 2] += sparkVelocities[i].z * delta;
+
+        if (sparkPositions[i * 3 + 1] < 0.05) {
+          sparkPositions[i * 3 + 1] = 0.05;
+          sparkVelocities[i].y = -sparkVelocities[i].y * 0.35;
+          sparkVelocities[i].x *= 0.65;
+          sparkVelocities[i].z *= 0.65;
+        }
+      }
+    }
+  }
+  if (hasActive) {
+    sparkGeo.attributes.position.needsUpdate = true;
+  }
+}
+
+// ==========================================
+// SISTEMA DE LOOT Y HAZ DE LUZ 3D (MU R18)
+// ==========================================
+let audioCtx = null;
+function playJewelSound() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const now = audioCtx.currentTime;
+    [2093.0, 3135.96, 4186.01, 5587.65].forEach((freq, idx) => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + idx * 0.035);
+      gain.gain.setValueAtTime(0.22, now + idx * 0.035);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.035 + 0.65);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(now + idx * 0.035);
+      osc.stop(now + idx * 0.035 + 0.68);
+    });
+  } catch (err) {}
+}
+
+const worldDrops = [];
+function spawnWorldDrop(pos, name, rarity = "legendary", color = 0xfbbf24) {
+  const group = new THREE.Group();
+  group.position.set(pos.x, 0, pos.z);
+
+  // Haz de luz vertical 3D
+  const beamGeo = new THREE.CylinderGeometry(0.18, 0.45, 8.5, 16, 1, true);
+  const beamMat = new THREE.MeshBasicMaterial({
+    color, transparent: true, opacity: 0.6, side: THREE.DoubleSide, blending: THREE.AdditiveBlending, depthWrite: false
+  });
+  const beam = new THREE.Mesh(beamGeo, beamMat);
+  beam.position.y = 4.25;
+  group.add(beam);
+
+  // Núcleo blanco
+  const coreGeo = new THREE.CylinderGeometry(0.06, 0.12, 8.5, 8, 1, true);
+  const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending });
+  const core = new THREE.Mesh(coreGeo, coreMat);
+  core.position.y = 4.25;
+  group.add(core);
+
+  // Joya giratoria 3D
+  const gem = new THREE.Mesh(
+    new THREE.OctahedronGeometry(0.32, 0),
+    new THREE.MeshStandardMaterial({ color, metalness: 0.9, roughness: 0.1, emissive: color, emissiveIntensity: 1.5 })
+  );
+  gem.position.y = 0.9;
+  group.add(gem);
+
+  scene.add(group);
+  worldDrops.push({ group, beam, gem, name, color, active: true });
+  playJewelSound();
+  showMessage(`💎 ¡DROP LEGENDARIO! [${name}]`);
+}
+
+function attackEnemy(skill = "normal") {
+  let target = null;
+  let bestDist = 3.5;
+
+  enemies.forEach(e => {
+    if (!e.alive) return;
+    const d = player.position.distanceTo(e.mesh.position);
+    if (d < bestDist) {
+      bestDist = d;
+      target = e;
+    }
+  });
+
+  if (target) {
+    selectedEnemy = target;
+    const isCrit = Math.random() < (0.15 + skinStatMultiplier.crit);
+    let baseDmg = skill === "cyclone" ? 48 : 28;
+    baseDmg *= skinStatMultiplier.atk;
+    if (isCrit) baseDmg *= (1.5 + (skinStatMultiplier.critDmg || 0));
+    baseDmg = Math.round(baseDmg);
+
+    target.hp -= baseDmg;
+    spawnHitSparks(target.mesh.position, isCrit, skill === "cyclone");
+    if (skinStatMultiplier.lifesteal > 0) {
+      const healed = Math.round(baseDmg * skinStatMultiplier.lifesteal);
+      playerHp = Math.min(playerMaxHp, playerHp + healed);
+    }
+
+    if (swordMesh) swordMesh.rotation.x = -1.2;
+    setTimeout(() => { if (swordMesh) swordMesh.rotation.x = 0; }, 180);
+
+    if (target.hp <= 0) {
+      target.hp = 0;
+      target.alive = false;
+      scene.remove(target.mesh);
+      playerXp += target.level * 15;
+
+      // Drop Legendario de MU con Haz de Luz 3D
+      if (Math.random() < 0.5) {
+        const pool = [
+          ["Joya de la Bendición (Jewel of Bless)", "legendary", 0xfbbf24],
+          ["Joya del Alma (Jewel of Soul)", "legendary", 0x38bdf8],
+          ["Espada Dragón Carmesí", "legendary", 0xef4444],
+          ["Dagas de Rasaka", "legendary", 0xa855f7]
+        ];
+        const pick = pool[Math.floor(Math.random() * pool.length)];
+        spawnWorldDrop(target.mesh.position, pick[0], pick[1], pick[2]);
+      }
+
+      if (playerXp >= playerLevel * 50) {
+        playerLevel++;
+        playerMaxHp += 20;
+        playerHp = playerMaxHp;
+        showMessage("¡NIVEL AUMENTADO! Nivel " + playerLevel);
+      } else {
+        showMessage(`¡${target.name} derrotado! (+${target.level * 15} EXP)`);
+      }
+      selectedEnemy = null;
+    } else {
+      showMessage(`${isCrit ? '💥 ¡CRÍTICO! ' : '⚔️ ¡IMPACTO! '} -${baseDmg} HP`);
+    }
+  } else {
+    showMessage("¡Ningún enemigo al alcance!");
+  }
+  updateTargetUI();
+  updatePlayerUI();
+}
+
+// Botones UI
+document.getElementById("attackBtn").addEventListener("click", () => attackEnemy("normal"));
+document.getElementById("cycloneBtn").addEventListener("click", () => {
+  if (playerMp >= 10) {
+    playerMp -= 10;
+    attackEnemy("cyclone");
+    player.rotation.y += Math.PI * 2;
+  } else {
+    showMessage("¡Maná insuficiente para Twisting Slash!");
+  }
+});
+document.getElementById("mountBtnQuick").addEventListener("click", toggleMount);
+document.getElementById("openR18").addEventListener("click", () => {
+  if (window.MU3D_R18 && typeof window.MU3D_R18.openPanel === "function") {
+    window.MU3D_R18.openPanel();
+  }
+});
+
+// Eventos R18
+window.addEventListener("mu3d:r18-skin", e => {
+  const skin = e.detail;
+  if (!skin) return;
+  currentSkinColor = skin.color;
+  document.getElementById("skinLabel").textContent = skin.name;
+  createPlayerVisual();
+  skinStatMultiplier = {
+    atk: 1.0 + (skin.attack || 0),
+    def: 1.0 + (skin.defense || 0),
+    hpMax: 100 + Math.round((skin.hp || 0) * 100),
+    crit: skin.crit || 0.05,
+    lifesteal: skin.lifesteal || 0.0
+  };
+  playerMaxHp = skinStatMultiplier.hpMax;
+  playerHp = Math.min(playerHp, playerMaxHp);
+  updatePlayerUI();
+  showMessage(`Skin activada: ${skin.name} (${skin.desc})`);
+});
+
+window.addEventListener("mu3d:r18-mount", e => {
+  if (e.detail.mounted !== isMounted) {
+    toggleMount();
+  }
+});
+
+window.addEventListener("mu3d:r18-travel-torlan", () => {
+  const torlanIdx = MAPS.findIndex(m => m[0] === "Cañón Torlan");
+  buildMap(torlanIdx >= 0 ? torlanIdx : 8);
+});
+
+// Teclado
+const keys = {};
+window.addEventListener("keydown", e => {
+  keys[e.code] = true;
+  if (e.code === "Space") { e.preventDefault(); attackEnemy("normal"); }
+  if (e.code === "KeyR") { attackEnemy("cyclone"); }
+  if (e.code === "KeyM") { toggleMount(); }
+  if (e.code === "KeyP") { buildMap(8); } // Viaje a Torlan
+});
+window.addEventListener("keyup", e => { keys[e.code] = false; });
+
+// Cámara con mouse / touch
+let camPitch = 0.35;
+let camYaw = 0;
+let isDragging = false;
+let lastMouseX = 0, lastMouseY = 0;
+
+renderer.domElement.addEventListener("pointerdown", e => {
+  if (e.button === 0 || e.button === 2) {
+    isDragging = true;
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+  }
+});
+window.addEventListener("pointerup", () => { isDragging = false; });
+window.addEventListener("pointermove", e => {
+  if (!isDragging) return;
+  camYaw -= (e.clientX - lastMouseX) * 0.006;
+  camPitch = Math.max(0.1, Math.min(1.2, camPitch + (e.clientY - lastMouseY) * 0.004));
+  lastMouseX = e.clientX;
+  lastMouseY = e.clientY;
+});
+
+// Bucle principal
+let lastTime = performance.now();
+buildMap(0);
+
+function animate(now) {
+  requestAnimationFrame(animate);
+  const delta = Math.min((now - lastTime) / 1000, 0.05);
+  lastTime = now;
+
+  if (msgTimer > 0) {
+    msgTimer -= delta;
+    if (msgTimer <= 0) document.getElementById("message").textContent = "";
+  }
+
+  // Movimiento
+  const speed = 7.5 * mountSpeedMultiplier;
+  let moveX = 0, moveZ = 0;
+  if (keys["KeyW"] || keys["ArrowUp"]) moveZ -= 1;
+  if (keys["KeyS"] || keys["ArrowDown"]) moveZ += 1;
+  if (keys["KeyA"] || keys["ArrowLeft"]) moveX -= 1;
+  if (keys["KeyD"] || keys["ArrowRight"]) moveX += 1;
+
+  if (moveX !== 0 || moveZ !== 0) {
+    const len = Math.hypot(moveX, moveZ);
+    moveX /= len; moveZ /= len;
+    const forwardX = -Math.sin(camYaw) * moveZ + Math.cos(camYaw) * moveX;
+    const forwardZ = -Math.cos(camYaw) * moveZ - Math.sin(camYaw) * moveX;
+    player.position.x += forwardX * speed * delta;
+    player.position.z += forwardZ * speed * delta;
+    player.rotation.y = Math.atan2(forwardX, forwardZ);
+  }
+
+  // Cámara en 3ª persona
+  const dist = 9.5;
+  const cx = player.position.x + Math.sin(camYaw) * Math.cos(camPitch) * dist;
+  const cy = player.position.y + Math.sin(camPitch) * dist + 2.0;
+  const cz = player.position.z + Math.cos(camYaw) * Math.cos(camPitch) * dist;
+  camera.position.set(cx, cy, cz);
+  camera.lookAt(player.position.x, player.position.y + 1.2, player.position.z);
+
+  // Portal rotación
+  if (portalMesh) portalMesh.rotation.y += delta * 1.2;
+
+  // Actualizar física y renderizado de chispas de combate
+  updateSparks(delta);
+
+  // Animar y recoger drops del suelo (MU Light Beams)
+  for (let i = worldDrops.length - 1; i >= 0; i--) {
+    const d = worldDrops[i];
+    d.beam.rotation.y += delta * 0.8;
+    d.gem.rotation.y += delta * 2.5;
+    d.gem.position.y = 0.9 + Math.sin(now * 0.003 + i) * 0.15;
+    if (player.position.distanceTo(d.group.position) < 2.5) {
+      scene.remove(d.group);
+      worldDrops.splice(i, 1);
+      playJewelSound();
+      playerXp += 100;
+      showMessage(`⭐ ¡Has recogido [${d.name}]! (+100 EXP)`);
+      updatePlayerUI();
+    }
+  }
+
+  renderer.render(scene, camera);
+}
+requestAnimationFrame(animate);
+
+// Exportar globals requeridos por r18-addon.js
+window.THREE = THREE;
+window.sc = scene;
+window.P = { g: player, speed: 7.5 };
+window.MP = MAPS;
+window.build = buildMap;
+window.S = { r18Map: 0 };
+</script>
+
+<!-- Carga del Addon Oficial R18 -->
+<script src="./r18-addon.js"></script>
+</body>
+</html>
